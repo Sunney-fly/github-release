@@ -1,5 +1,7 @@
 # github-release
 
+<img src="docs/demo.gif" width="760" alt="audit_secrets.py finding leaked credentials">
+
 **发布前给自己踩刹车：先扫脱敏，再查四件套，最后验证别人 clone 下来能跑。**
 
 两个零依赖 Python 脚本 + 一份清单。把「发个开源仓库」从两小时的试错压到二十分钟。
