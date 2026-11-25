@@ -43,6 +43,17 @@ def read_token():
     token = os.environ.get("GH_TOKEN", "").strip()
     if token:
         return token
+    # A long-running parent process (an IDE, a terminal started before `setx`)
+    # keeps a stale environment block, so ask Windows for the user-level value.
+    if os.name == "nt":
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
+                value, _ = winreg.QueryValueEx(key, "GH_TOKEN")
+                if value and value.strip():
+                    return value.strip()
+        except OSError:
+            pass
     for candidate in TOKEN_CANDIDATES:
         path = pathlib.Path(candidate)
         if path.exists():
