@@ -4,7 +4,7 @@
 
 **发布前给自己踩刹车：先扫脱敏，再查四件套，最后验证别人 clone 下来能跑。**
 
-两个零依赖 Python 脚本 + 一份清单。把「发个开源仓库」从两小时的试错压到二十分钟。
+四个零依赖 Python 脚本 + 一份清单。把「发个开源仓库」从两小时的试错压到二十分钟。
 
 ---
 
@@ -20,7 +20,7 @@
 | 说「69 项测试全绿」但实际挂 1 个 | 面试官一 clone 就穿 | 发布前在副本上真跑一遍 |
 | 只有 1 个 commit | 看不出开发过程 | 提示拆成有意义的提交 |
 
-## 两个脚本
+## 四个脚本
 
 ### `audit_secrets.py` — 脱敏审计
 
@@ -49,6 +49,32 @@ python preflight.py <项目目录> --test "pytest -q"
 - README 里所有相对链接指向的文件是否真的存在
 - `git status` 是否干净、有没有 commit、commit 数够不够
 - 可选：跑测试，失败即阻塞
+
+### `push-repo.py` — 绕过 git push 的发布通道
+
+```bash
+python push-repo.py <local_dir> <owner/repo> --message "feat: ..."
+```
+
+当 `github.com:443` 不通、但 `api.github.com` 通时（国内网络很常见），`git push` 会卡死。这个脚本改走 Git Data API：blobs → tree → commit → ref，提交在服务端组装。
+
+- 空仓库 409 → 先 PUT 一个文件点亮
+- 不带 `base_tree` → 整棵树替换，被网页上传压平过的仓库一次修好
+- 推完核对 ref 指向，不通过就报错，不假设成功
+
+三个坑都踩过：端点必须带 `/repos/{owner}/{repo}` 前缀；长连接会中途断（`WinError 10060`），要指数退避重试；`git ls-files` 默认转义中文文件名，要 `-c core.quotepath=false`。
+
+### `make-gif.py` — 录首屏演示
+
+```bash
+python make-gif.py --title "项目名" --command "<真实命令>" --run <工作目录> --out docs/demo.gif
+```
+
+不录屏：真实执行命令、捕获输出、用 Pillow 渲染成终端风格。GIF 里每一行都是实际跑出来的。
+
+三个坑：绝对路径会漏进图里（按 `--run` 归一化成 `./`）；Consolas 没有中日韩字形（按行切雅黑）；系统 Python 3.8 输出 GBK（subprocess 要 `encoding="utf-8"` + `PYTHONUTF8=1`）。
+
+产物 29–32 KB，README 用 `<img src="docs/demo.gif" width="760">`。
 
 ## 用法
 

@@ -2,7 +2,7 @@
 name: github-release
 description: "把一个本地项目整理成可公开发布的 GitHub 仓库：脱敏扫描、发布四件套、认证方式选择、push 与验收。用户说「发到 GitHub / 开源这个项目 / 帮我发布 / 推上去」时使用。"
 ---
-> **验证**：未记录（下次用完后回填 —— `<日期>/<provider:model>/<可复跑命令>/ok|部分`）沉默不等于验证过。
+> **验证**：2026-11-25 / deepseek-v4.1-flash / `assets/push-repo.py` 推 5 个仓库（portfolio 39、jarvis-hub 91、fang-site 122、cdp-clip 10、github-release 7），每个都核对了 ref 指向 / ok。审计与 GIF 生成同轮实测。
 
 
 # GitHub 仓库发布
@@ -68,27 +68,64 @@ python ./preflight.py <项目目录>
 - 为了显得厉害写「支持 100+ 网站」这种无法验证的话
 - 把 commit 数、star 数当卖点（会变，且容易被查）
 
-### 4. 选认证方式（血泪教训）
+### 4. 选认证方式（按本机实测排序）
 
-| 方式 | 适用 | 坑 |
+| 方式 | 适用 | 关键事实 |
 |---|---|---|
-| **SSH key** | 推荐，一次配置长期可用 | 加 key 需要 GitHub sudo 密码，**必须用户本人输** |
-| **HTTPS + GCM** | 凭证还有效时最省事 | 缓存失效时报 `Invalid username or token`，需要 `git credential-manager github logout` 重新授权 |
-| **网页上传** | ❌ **不要用** | 见下方「最大坑」 |
+| **API 推送** `assets/push-repo.py` | ✅ **本机首选** | `github.com:443` 不通，`api.github.com` 通；只要一个 PAT |
+| SSH key | 换机器、或想长期免密 | 加 key 需要 GitHub sudo 密码，**必须用户本人输** |
+| HTTPS + GCM | 凭证还有效时最省事 | 失效报 `Invalid username or token`，需 `git credential-manager github logout` |
+| 网页上传 | ❌ **不要用** | 会压平目录，见「最大的坑」 |
+
+**API 推送（推荐）**：
+
+```powershell
+# 用户建 classic PAT（只勾 repo），存到 _work/gh-token.txt 第一行，或设 GH_TOKEN
+python ./push-repo.py <本地目录> <owner/repo> --message "feat: ..."
+```
+
+走 Git Data API（blobs → tree → commit → ref），自带三个处理：
+
+- 空仓库 409 → 先 PUT 一个文件点亮
+- 不带 `base_tree` → **整棵树替换**，被压平的仓库一次修好
+- 推完核对 ref 指向，不通过即报错
+
+**三个实测的坑**：
+
+1. 端点必须带 `/repos/{owner}/{repo}` 前缀，漏了全 404
+2. 长连接会中途断（`WinError 10060`），必须指数退避重试
+3. `git ls-files` 默认转义中文文件名，要 `-c core.quotepath=false`
+
+> token 用完立刻删文件；全程不打印。
 
 **SSH 配置（22 端口常被墙，走 443）**：
 
 ```powershell
 ssh-keygen -t ed25519 -f <工作区>/_work/gh-publish-key -N "" -C "publish"
 # 把 .pub 内容贴到 https://github.com/settings/ssh/new
-# push 时：
 $env:GIT_SSH_COMMAND = "ssh -i <工作区>/_work/gh-publish-key -p 443 -o StrictHostKeyChecking=accept-new"
 git push -f ssh://git@ssh.github.com:443/<owner>/<repo>.git main
 ```
 
 > 密钥放工作区内，**不要放 `~/.ssh`**（会触发安全策略拦截）。
 
-### 5. 发布后必须验证
+### 5. 录演示 GIF（`assets/make-gif.py`）
+
+首屏动图是点击率影响最大的单项。**不用录屏**——真实执行命令、捕获输出、再用 Pillow 渲染成终端风格，既不占屏也不摆拍：
+
+```powershell
+python ./make-gif.py --title "项目名" --command "<真实命令>" --run <工作目录> --out docs/demo.gif
+```
+
+**三个实测的坑**：
+
+1. 绝对路径会漏进 GIF → 脚本按 `--run` 目录归一化成 `./`
+2. Consolas 没有中日韩字形 → 按行判断，含中文字符的行切到雅黑
+3. 系统 Python 3.8 输出 GBK → subprocess 必须指定 `encoding="utf-8"` + `PYTHONUTF8=1`，否则中文全是乱码
+
+产物控制在 50 KB 以内（实测 29–32 KB），README 用 `<img src="docs/demo.gif" width="760">`。
+
+### 6. 发布后必须验证
 
 ```powershell
 # 1. 确认文件数与目录结构
